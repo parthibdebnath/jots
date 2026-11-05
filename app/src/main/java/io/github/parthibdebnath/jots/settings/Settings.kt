@@ -26,6 +26,10 @@ data class AppSettings(
 
     // Pen & touch
     val fingerDrawing: Boolean = false,
+    /** Strokes that look like shapes are replaced with clean ones as the pen lifts. */
+    val autoShape: Boolean = false,
+    /** Holding the pen still at the end of a stroke snaps it to a shape, even with auto shape off. */
+    val holdToSnap: Boolean = true,
     val scrollbarOnLeft: Boolean = false,
     /** Fraction of the screen height moved per dial detent in scroll mode. */
     val dialScrollStep: Float = 0.08f,

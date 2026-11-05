@@ -31,6 +31,8 @@ class Polyline(
             xs += x; ys += y; ts += t; ps += p
         }
 
+        fun clear() { xs.clear(); ys.clear(); ts.clear(); ps.clear() }
+
         fun build() = Polyline(xs.toFloatArray(), ys.toFloatArray(), ts.toLongArray(), ps.toFloatArray())
     }
 }

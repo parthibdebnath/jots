@@ -22,6 +22,7 @@ enum class Action(val label: String, val group: Group, val isHold: Boolean = fal
     TOOL_ERASER("Eraser", Group.Tools),
     TOOL_LASSO("Lasso select", Group.Tools),
     TOGGLE_ERASER("Toggle eraser / last tool", Group.Tools),
+    TOGGLE_AUTO_SHAPE("Auto shape on / off", Group.Tools),
 
     UNDO("Undo", Group.Edit),
     REDO("Redo", Group.Edit),

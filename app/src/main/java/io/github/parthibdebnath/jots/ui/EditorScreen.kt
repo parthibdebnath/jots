@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.FormatColorFill
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Interests
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -274,6 +275,8 @@ private fun Toolbar(
                 ToolButton(Icons.Outlined.BorderColor, "Highlighter", controller.tool == Tool.HIGHLIGHTER) { onToolTap(Tool.HIGHLIGHTER) }
                 ToolButton(JotsIcons.Eraser, "Eraser", controller.tool == Tool.ERASER) { onToolTap(Tool.ERASER) }
                 ToolButton(JotsIcons.Lasso, "Select", controller.tool == Tool.LASSO) { onToolTap(Tool.LASSO) }
+                val autoShape = LocalApp.current.settings.state.collectAsState().value.autoShape
+                ToolButton(Icons.Outlined.Interests, if (autoShape) "Auto shape on" else "Auto shape off", autoShape) { controller.toggleAutoShape() }
                 Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(MaterialTheme.colorScheme.outlineVariant))
                 QuickColors(controller, onEditColor)
             }
@@ -446,10 +449,31 @@ private fun ColumnScope.PenPanel(app: JotsApp, controller: EditorController) {
     }
     Spacer(Modifier.height(12.dp))
     val s by app.settings.state.collectAsState()
+    ShapeSwitches(app)
+    Spacer(Modifier.height(8.dp))
     Text("Colours (long-press a colour in the toolbar to change it)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(6.dp))
     Row(Modifier.horizontalScroll(rememberScrollState())) {
         s.palette.forEach { c -> ColorDot(Color(c), c == pen.color, onClick = { controller.updatePen(pen.copy(color = c)) }) }
+    }
+}
+
+@Composable
+private fun ShapeSwitches(app: JotsApp) {
+    val s by app.settings.state.collectAsState()
+    Row(Modifier.fillMaxWidth().clickable { app.settings.update { it.copy(autoShape = !it.autoShape) } }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Auto shape", style = MaterialTheme.typography.bodyLarge)
+            Text("Lines, circles, rectangles and polygons come out clean", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        androidx.compose.material3.Switch(s.autoShape, { v -> app.settings.update { it.copy(autoShape = v) } })
+    }
+    Row(Modifier.fillMaxWidth().clickable { app.settings.update { it.copy(holdToSnap = !it.holdToSnap) } }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Hold to snap", style = MaterialTheme.typography.bodyLarge)
+            Text("Keep the pen still at the end of a stroke to snap it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        androidx.compose.material3.Switch(s.holdToSnap, { v -> app.settings.update { it.copy(holdToSnap = v) } })
     }
 }
 
@@ -459,6 +483,8 @@ private fun ColumnScope.HighlighterPanel(app: JotsApp, controller: EditorControl
     Text("Highlighter", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
     Spacer(Modifier.height(8.dp))
     SizeSlider("Size", h.size, 6f, Brushes.MAX_SIZE) { controller.updateHighlighter(h.withSize(it)) }
+    Spacer(Modifier.height(4.dp))
+    ShapeSwitches(app)
     Spacer(Modifier.height(8.dp))
     val s by app.settings.state.collectAsState()
     Row(Modifier.horizontalScroll(rememberScrollState())) {

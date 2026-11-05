@@ -11,6 +11,7 @@ import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.VelocityTracker
@@ -221,7 +222,8 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
 
     // region Input dispatch
 
-    private enum class PenGesture { NONE, INK, ERASE, LASSO, PAN, SCROLLBAR, MOVE_SELECTION, SCALE_SELECTION }
+    // SNAPPED: the stroke already ended by holding still; the rest of the gesture is ignored.
+    private enum class PenGesture { NONE, INK, SNAPPED, ERASE, LASSO, PAN, SCROLLBAR, MOVE_SELECTION, SCALE_SELECTION }
 
     private enum class Effective { PEN, HIGHLIGHTER, ERASER, LASSO, PAN }
 
@@ -229,6 +231,16 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     private var penPointerId = -1
     private var inkStrokeId: InProgressStrokeId? = null
     private val pendingSpecs = HashMap<InProgressStrokeId, BrushSpec>()
+
+    // Shapes: strokes started with auto shape on get recognized when they finish; strokes the
+    // user held still at the end are snapped right away with whatever shape was recognized.
+    private val autoShapeIds = HashSet<InProgressStrokeId>()
+    private val snapShapes = HashMap<InProgressStrokeId, Shape>()
+    private val inkPath = Polyline.Builder()
+    private var holdX = 0f
+    private var holdY = 0f
+    private var lastInkEvent: MotionEvent? = null
+    private val holdToSnap = Runnable { onHoldStill() }
     private var lastPenX = 0f
     private var lastPenY = 0f
     private var lastPenActivity = 0L
@@ -348,8 +360,14 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
                 val spec = if (effective == Effective.PEN) penSpec else highlighterSpec
                 val id = wet.startStroke(ev, penPointerId, Brushes.brush(spec), viewToDoc)
                 pendingSpecs[id] = spec
+                if (host.settings.autoShape) autoShapeIds += id
                 inkStrokeId = id
                 penGesture = PenGesture.INK
+                inkPath.clear()
+                inkPath.add(viewport.toDocX(x), viewport.toDocY(y), 0, 0f)
+                rememberInkEvent(ev)
+                holdX = x; holdY = y
+                armHold()
             }
             Effective.ERASER -> {
                 penGesture = PenGesture.ERASE
@@ -369,7 +387,18 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     private fun penMove(ev: MotionEvent) {
         val idx = ev.findPointerIndex(penPointerId).takeIf { it >= 0 } ?: return
         when (penGesture) {
-            PenGesture.INK -> inkStrokeId?.let { runCatching { wet.addToStroke(ev, penPointerId, it) } }
+            PenGesture.INK -> inkStrokeId?.let {
+                runCatching { wet.addToStroke(ev, penPointerId, it) }
+                for (h in 0 until ev.historySize) inkPath.add(viewport.toDocX(ev.getHistoricalX(idx, h)), viewport.toDocY(ev.getHistoricalY(idx, h)), 0, 0f)
+                inkPath.add(viewport.toDocX(ev.getX(idx)), viewport.toDocY(ev.getY(idx)), 0, 0f)
+                rememberInkEvent(ev)
+                // Any real movement restarts the "hold still to snap" clock.
+                if (hypot(ev.getX(idx) - holdX, ev.getY(idx) - holdY) > HOLD_SLOP_DP * density) {
+                    holdX = ev.getX(idx); holdY = ev.getY(idx)
+                    armHold()
+                }
+            }
+            PenGesture.SNAPPED -> Unit
             PenGesture.ERASE -> {
                 val e = erase ?: return
                 for (h in 0 until ev.historySize) e.to(viewport.toDocX(ev.getHistoricalX(idx, h)), viewport.toDocY(ev.getHistoricalY(idx, h)))
@@ -400,11 +429,16 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     }
 
     private fun penUp(ev: MotionEvent, cancel: Boolean) {
+        removeCallbacks(holdToSnap)
+        lastInkEvent?.recycle()
+        lastInkEvent = null
         when (penGesture) {
+            PenGesture.SNAPPED -> Unit
             PenGesture.INK -> inkStrokeId?.let { id ->
                 if (cancel) {
                     wet.cancelStroke(id, ev)
                     pendingSpecs.remove(id)
+                    autoShapeIds.remove(id)
                 } else {
                     runCatching { wet.finishStroke(ev, penPointerId, id) }
                 }
@@ -429,13 +463,64 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     }
 
     private fun onWetFinished(strokes: Map<InProgressStrokeId, Stroke>) {
+        val shaped = ArrayList<Pair<StrokeEntry, Shape>>()
         val added = strokes.map { (id, stroke) ->
             val spec = pendingSpecs.remove(id) ?: penSpec
-            document.entry(spec, stroke)
+            val entry = document.entry(spec, stroke)
+            val shape = snapShapes.remove(id) ?: if (autoShapeIds.contains(id)) {
+                val line = InkOps.toPolyline(stroke.inputs)
+                ShapeRecognizer.recognize(line.x, line.y)
+            } else null
+            autoShapeIds.remove(id)
+            if (shape != null) shaped += entry to shape
+            entry
         }
         document.apply(Edit(emptyList(), added))
+        // The freehand stroke and its clean replacement are separate undo steps, so a wrong
+        // guess is one undo away from what was actually drawn.
+        for ((entry, shape) in shaped) {
+            val clean = shapeStroke(entry, shape) ?: continue
+            document.apply(Edit(listOf(entry), listOf(clean)))
+        }
         wet.removeFinishedStrokes(strokes.keys)
         edited()
+    }
+
+    private fun rememberInkEvent(ev: MotionEvent) {
+        lastInkEvent?.recycle()
+        lastInkEvent = MotionEvent.obtain(ev)
+    }
+
+    private fun armHold() {
+        removeCallbacks(holdToSnap)
+        if (host.settings.holdToSnap) postDelayed(holdToSnap, HOLD_MS)
+    }
+
+    /** The pen has stayed put at the end of a stroke: snap it, if it's a recognizable shape. */
+    private fun onHoldStill() {
+        val id = inkStrokeId ?: return
+        if (penGesture != PenGesture.INK) return
+        val ev = lastInkEvent ?: return
+        val path = inkPath.build()
+        val shape = ShapeRecognizer.recognize(path.x, path.y, lenient = true) ?: return
+        snapShapes[id] = shape
+        runCatching { wet.finishStroke(ev, penPointerId, id) }
+        penGesture = PenGesture.SNAPPED
+        inkStrokeId = null
+        performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    /** A clean stroke tracing [shape], drawn with [raw]'s brush at its typical pressure. */
+    private fun shapeStroke(raw: StrokeEntry, shape: Shape): StrokeEntry? {
+        val (xs, ys) = ShapeRecognizer.outline(shape, step = 2f)
+        if (xs.size < 2) return null
+        val line = InkOps.toPolyline(raw.stroke.inputs)
+        val pressures = line.p.filter { it >= 0f }.sorted()
+        val p = if (pressures.isEmpty()) -1f else pressures[pressures.size / 2]
+        // Generous time steps keep Ink's input smoothing from rounding off the corners.
+        val poly = Polyline(xs, ys, LongArray(xs.size) { it * 8L }, FloatArray(xs.size) { p })
+        val stroke = InkOps.rebuild(raw.spec, raw.stroke.inputs, poly) ?: return null
+        return StrokeEntry(document.newId(), raw.z, raw.spec, stroke)
     }
 
     // Hover: fed from the activity, so it works for both real and synthesized pen events.
@@ -1043,6 +1128,8 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
         const val PAPER_DARK = 0xFF1C1D21.toInt()
         const val ACCENT = 0xFF3D6DF2.toInt()
         private const val PALM_GRACE_MS = 400L
+        private const val HOLD_MS = 500L
+        private const val HOLD_SLOP_DP = 4f
 
         /** Renders the top of a note for the notes list. */
         fun renderThumbnail(strokes: List<StrokeEntry>, paper: Paper, dark: Boolean, widthPx: Int): android.graphics.Bitmap {

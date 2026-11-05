@@ -197,6 +197,12 @@ class EditorController(
         }
     }
 
+    fun toggleAutoShape() {
+        val on = !settings.autoShape
+        app.settings.update { it.copy(autoShape = on) }
+        showFlash(if (on) "Auto shape on" else "Auto shape off")
+    }
+
     fun showFlash(text: String) {
         flash = text to SystemClock.uptimeMillis()
     }
@@ -215,6 +221,7 @@ class EditorController(
             Action.TOOL_ERASER -> selectTool(Tool.ERASER)
             Action.TOOL_LASSO -> selectTool(Tool.LASSO)
             Action.TOGGLE_ERASER -> selectTool(if (tool == Tool.ERASER) view.lastInkTool else Tool.ERASER)
+            Action.TOGGLE_AUTO_SHAPE -> toggleAutoShape()
             Action.UNDO -> view.undo()
             Action.REDO -> view.redo()
             Action.DELETE_SELECTION -> view.deleteSelection()
