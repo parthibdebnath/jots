@@ -144,7 +144,7 @@ private fun Divider() = HorizontalDivider(Modifier.padding(horizontal = 18.dp), 
 // endregion
 
 @Composable
-fun SettingsScreen(app: JotsApp, onBack: () -> Unit, onTablet: () -> Unit) {
+fun SettingsScreen(app: JotsApp, onBack: () -> Unit, onTablet: () -> Unit, onUniversal: () -> Unit) {
     val s by app.settings.state.collectAsState()
     val status by app.driver.status.collectAsState()
     val overlays = LocalOverlays.current
@@ -157,6 +157,9 @@ fun SettingsScreen(app: JotsApp, onBack: () -> Unit, onTablet: () -> Unit) {
             ) { on -> app.settings.update { it.copy(driverEnabled = on) } }
             Divider()
             NavRow("Tablet, buttons and dial", statusLabel(status), onClick = onTablet)
+            Divider()
+            val uni by app.universal.status.collectAsState()
+            NavRow("Tablet in other apps", if (uni is io.github.parthibdebnath.jots.universal.UniversalStatus.On) "On" else "Off", onClick = onUniversal)
         }
         Section("Writing") {
             SwitchRow("Draw with finger", "Off: one finger scrolls, two fingers zoom", s.fingerDrawing) { v -> app.settings.update { it.copy(fingerDrawing = v) } }
@@ -196,7 +199,7 @@ private fun statusLabel(s: TabletStatus) = when (s) {
 }
 
 @Composable
-fun TabletScreen(app: JotsApp, onBack: () -> Unit) {
+fun TabletScreen(app: JotsApp, onBack: () -> Unit, onUniversal: () -> Unit) {
     val s by app.settings.state.collectAsState()
     val status by app.driver.status.collectAsState()
     val overlays = LocalOverlays.current
@@ -221,7 +224,12 @@ fun TabletScreen(app: JotsApp, onBack: () -> Unit) {
             Section("Try it") { LiveTest(app) }
         }
 
-        Section("Buttons") {
+        Section("Other apps") {
+            val uni by app.universal.status.collectAsState()
+            NavRow("Use the tablet in other apps", if (uni is io.github.parthibdebnath.jots.universal.UniversalStatus.On) "On" else "Off", onClick = onUniversal)
+        }
+
+        Section("Buttons in Jots") {
             Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (learning) "Press the pen button, tablet key or keyboard key you want to set…" else "Rows light up while their button is held.",
@@ -260,7 +268,7 @@ fun TabletScreen(app: JotsApp, onBack: () -> Unit) {
             }
         }
 
-        Section("Dial") {
+        Section("Dial in Jots") {
             Text("The dial does: ${s.dialMode.label}. A key set to “${Action.CYCLE_DIAL.label}” steps through the ticked modes.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
             for (m in DialMode.entries) {
                 Row(

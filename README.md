@@ -42,6 +42,25 @@ If the driver is switched off (Settings → Tablet driver), Jots uses Android's 
 support: pressure and one barrel button, plus any keys the tablet sends as keyboard keys (those
 can be mapped too).
 
+### In other apps (optional)
+
+**Settings → Tablet in other apps** makes the pen, both barrel buttons, the keys and the dial work
+system-wide. Android only lets an app inject input with help, so this uses
+[Shizuku](https://shizuku.rikka.app/), which you start once per phone restart via Wireless
+debugging.
+
+While it's on:
+- a foreground service keeps the tablet when Jots leaves the screen;
+- the pen is injected into whatever app is in front as a real stylus, with pressure;
+- the lower barrel button is the normal stylus button, and the upper one flips to the eraser;
+- a small pointer follows the hovering pen. It's a non-touchable overlay at 80% opacity, so it
+  never blocks touches. (Android's own Settings app hides all overlays, so it doesn't show there.)
+- keys and the dial get their own mapping: back, home, recents, Ctrl+Z and other shortcuts,
+  scrolling, volume, zoom, brush size, or held Ctrl/Shift/Alt/Space.
+
+Inside Jots, everything works as before. If Shizuku stops, the mode stops and the tablet goes back
+to Android at once. It resumes when Shizuku is running again. The notification has a Stop button.
+
 ### Defaults
 
 | Control | Action |
@@ -50,6 +69,8 @@ can be mapped too).
 | Pen upper button | Hold: drag to scroll |
 | Keys 1–9 | Undo, Redo, Pen, Eraser, Highlighter, Lasso, Hide UI, Fit width, Change dial mode |
 | Dial | Scroll |
+| Keys 1–9, other apps | Ctrl+Z, Ctrl+Y, Back, Home, Recents, Page up, Page down, Open Jots, Change dial mode |
+| Dial, other apps | Scroll (cycles to Volume and Zoom) |
 
 Every one of these can be changed in **Settings → Tablet**. That screen also has:
 - a live test that lights up each button as you press it,
@@ -73,6 +94,7 @@ keyPassword), otherwise with the debug key.
 
 ## Layout
 
+- `universal/` — the optional system-wide mode: Shizuku injection, pen event state machine, pointer overlay, service
 - `tablet/` — Huion protocol parser, pen proximity tracking, tablet→screen mapping, USB driver, event replay
 - `input/` — actions, bindings, and the router that dispatches button presses
 - `editor/` — page view (Jetpack Ink for low-latency strokes), viewport, scroll bar, eraser/lasso geometry, undo

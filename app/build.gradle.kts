@@ -101,5 +101,11 @@ dependencies {
     // descriptor Android hands us, so the tablet works system-wide again when the app lets go.
     implementation("${libs.jna.get().module}:${libs.jna.get().version}@aar")
 
+    // "Use the tablet in other apps": Shizuku lends us the shell's permission to inject input
+    // system-wide; the bypass lets us reach the (hidden) input manager interface it needs.
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
+    implementation(libs.hiddenapibypass)
+
     testImplementation(libs.junit)
 }

@@ -21,6 +21,7 @@ sealed interface Screen {
     data class Editor(val noteId: String) : Screen
     data object Settings : Screen
     data object Tablet : Screen
+    data object Universal : Screen
 }
 
 val LocalApp = staticCompositionLocalOf<JotsApp> { error("No app") }
@@ -76,8 +77,9 @@ fun JotsRoot(activity: MainActivity, app: JotsApp, nav: Navigator) {
                             onClose = { nav.pop() },
                             onOpenSettings = { nav.push(Screen.Settings) },
                         )
-                        Screen.Settings -> SettingsScreen(app, onBack = { nav.pop() }, onTablet = { nav.push(Screen.Tablet) })
-                        Screen.Tablet -> TabletScreen(app, onBack = { nav.pop() })
+                        Screen.Settings -> SettingsScreen(app, onBack = { nav.pop() }, onTablet = { nav.push(Screen.Tablet) }, onUniversal = { nav.push(Screen.Universal) })
+                        Screen.Tablet -> TabletScreen(app, onBack = { nav.pop() }, onUniversal = { nav.push(Screen.Universal) })
+                        Screen.Universal -> UniversalScreen(app, onBack = { nav.pop() })
                     }
                 }
                 OverlayHost(overlays)

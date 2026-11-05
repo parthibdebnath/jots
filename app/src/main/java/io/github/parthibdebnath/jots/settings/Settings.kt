@@ -23,6 +23,8 @@ data class AppSettings(
     val mapping: TabletMapping = TabletMapping(),
     val bindings: Bindings = Bindings(),
     val showTabletCursor: Boolean = true,
+    /** How the tablet behaves in other apps (needs Shizuku). */
+    val universal: io.github.parthibdebnath.jots.universal.UniversalSettings = io.github.parthibdebnath.jots.universal.UniversalSettings(),
 
     // Pen & touch
     val fingerDrawing: Boolean = false,

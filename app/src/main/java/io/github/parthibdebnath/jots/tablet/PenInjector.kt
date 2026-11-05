@@ -76,7 +76,13 @@ class PenInjector(private val activity: Activity) {
                 downTime = SystemClock.uptimeMillis()
                 touch(MotionEvent.ACTION_DOWN, frame, buttons)
             }
-            PenPhase.MOVE -> if (down) touch(MotionEvent.ACTION_MOVE, frame, buttons)
+            PenPhase.MOVE -> if (down) touch(MotionEvent.ACTION_MOVE, frame, buttons) else {
+                // Joined mid-stroke (Jots just came to the front with the pen down): start one.
+                penActive = true
+                down = true
+                downTime = SystemClock.uptimeMillis()
+                touch(MotionEvent.ACTION_DOWN, frame, buttons)
+            }
             PenPhase.UP -> if (down) {
                 touch(MotionEvent.ACTION_UP, frame, buttons)
                 down = false

@@ -10,6 +10,8 @@ serialization = "1.11.0"
 profileinstaller = "1.4.1"
 ink = "1.0.0"
 jna = "5.17.0"
+shizuku = "13.1.5"
+hiddenApiBypass = "6.2"
 junit = "4.13.2"
 
 [libraries]
@@ -33,6 +35,9 @@ ink-rendering = { group = "androidx.ink", name = "ink-rendering", version.ref = 
 ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.ref = "ink" }
 ink-storage = { group = "androidx.ink", name = "ink-storage", version.ref = "ink" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
+shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
+hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version.ref = "hiddenApiBypass" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

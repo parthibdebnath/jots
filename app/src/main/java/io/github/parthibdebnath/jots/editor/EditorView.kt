@@ -132,6 +132,8 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         viewport.setSize(w, h, document.contentBottom)
+        // The view moved under the pen; the preview reappears with the next hover report.
+        hoverVisible = false
         updateStrip()
         viewChanged()
     }

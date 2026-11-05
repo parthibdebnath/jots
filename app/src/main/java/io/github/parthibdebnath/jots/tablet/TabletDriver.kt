@@ -79,7 +79,12 @@ class TabletDriver(private val context: Context) {
     var listener: TabletListener? = null
 
     private var enabled = true
-    private var wanted = false // The app is in the foreground and wants the tablet.
+    /**
+     * Who currently wants the tablet: the open app, and/or the "other apps" service. The tablet is
+     * claimed while anyone holds it and handed back to Android when the last one lets go.
+     */
+    private val holders = HashSet<String>()
+    private val wanted get() = holders.isNotEmpty()
     private var session: Session? = null
     private var permissionAsked: String? = null
 
@@ -126,17 +131,22 @@ class TabletDriver(private val context: Context) {
         }
     }
 
-    /** The app came to the foreground. */
-    fun onForeground() {
-        wanted = true
+    fun hold(holder: String) {
+        holders += holder
         acquire()
     }
 
-    /** The app left the foreground: give the tablet back to the system. */
-    fun onBackground() {
-        wanted = false
-        release()
+    /** [holder] no longer needs the tablet; it goes back to Android if nobody else does. */
+    fun letGo(holder: String) {
+        holders -= holder
+        if (!wanted) release()
     }
+
+    /** The app came to the foreground. */
+    fun onForeground() = hold(APP_HOLDER)
+
+    /** The app left the foreground. */
+    fun onBackground() = letGo(APP_HOLDER)
 
     /** Called when the app was launched by plugging the tablet in (permission is then implied). */
     fun onDeviceIntent(intent: Intent?) {
@@ -384,6 +394,7 @@ class TabletDriver(private val context: Context) {
 
     companion object {
         private const val TAG = "TabletDriver"
+        const val APP_HOLDER = "app"
         private const val ACTION_PERMISSION = "io.github.parthibdebnath.jots.USB_PERMISSION"
         private const val GET_DESCRIPTOR = 0x06
         private const val STRING_DESCRIPTOR = 0x03

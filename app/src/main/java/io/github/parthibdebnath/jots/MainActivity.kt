@@ -24,6 +24,7 @@ import io.github.parthibdebnath.jots.tablet.PenInjector
 import io.github.parthibdebnath.jots.tablet.TabletListener
 import io.github.parthibdebnath.jots.tablet.TabletParams
 import io.github.parthibdebnath.jots.ui.JotsRoot
+import io.github.parthibdebnath.jots.universal.GlobalInput
 import io.github.parthibdebnath.jots.ui.Navigator
 import kotlinx.coroutines.launch
 
@@ -53,17 +54,8 @@ class MainActivity : ComponentActivity() {
         setContent { JotsRoot(this, app, nav) }
         injector.attachCursor()
 
-        app.driver.listener = object : TabletListener {
-            override fun onPen(frame: PenFrame, params: TabletParams) = injector.onPen(frame, params, app.settings.value.mapping)
-            override fun onPenButton(index: Int, pressed: Boolean) = Unit // Seen via the events' button state.
-            override fun onPadKey(index: Int, pressed: Boolean) { app.router.onButton(ButtonId.Pad(index), pressed) }
-            override fun onDial(delta: Int) = app.router.onDial(delta)
-        }
         lifecycleScope.launch {
-            app.settings.state.collect { s ->
-                app.driver.setEnabled(s.driverEnabled)
-                injector.showCursor = s.showTabletCursor
-            }
+            app.settings.state.collect { s -> injector.showCursor = s.showTabletCursor }
         }
         app.driver.onDeviceIntent(intent)
     }
@@ -74,21 +66,31 @@ class MainActivity : ComponentActivity() {
         app.driver.onDeviceIntent(intent)
     }
 
+    /** While Jots is on screen, the tablet drives Jots itself (see [PenInjector]). */
+    private val inAppInput = object : TabletListener {
+        override fun onPen(frame: PenFrame, params: TabletParams) = injector.onPen(frame, params, app.settings.value.mapping)
+        override fun onPenButton(index: Int, pressed: Boolean) = Unit // Seen via the events' button state.
+        override fun onPadKey(index: Int, pressed: Boolean) { app.router.onButton(ButtonId.Pad(index), pressed) }
+        override fun onDial(delta: Int) = app.router.onDial(delta)
+    }
+
     override fun onStart() {
         super.onStart()
+        // Order matters: the other-apps mode first lets go of anything it was holding down.
+        app.universal.onAppInFront(true)
+        app.inAppInput = inAppInput
         app.driver.onForeground()
+        GlobalInput.refresh()
+        app.universal.sync()
     }
 
     override fun onStop() {
         injector.cancel()
         app.router.releaseAll()
+        if (app.inAppInput === inAppInput) app.inAppInput = null
+        app.universal.onAppInFront(false)
         app.driver.onBackground()
         super.onStop()
-    }
-
-    override fun onDestroy() {
-        if (app.driver.listener != null && isFinishing) app.driver.listener = null
-        super.onDestroy()
     }
 
     // region Focus mode
