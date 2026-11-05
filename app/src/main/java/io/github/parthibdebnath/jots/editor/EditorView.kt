@@ -109,6 +109,9 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
             override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) = onWetFinished(strokes)
         })
         isFocusable = true
+        // Writing often means pausing to think or read; the screen shouldn't time out meanwhile.
+        // Applies only while this view is on screen, so the home and settings screens still sleep.
+        keepScreenOn = true
     }
 
     // region Document & viewport
