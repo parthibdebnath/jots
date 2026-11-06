@@ -16,8 +16,8 @@ android {
         applicationId = "io.github.parthibdebnath.jots"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.0-alpha.2"
     }
 
     // Release signing: keystore.properties (not in git) holds storeFile/storePassword/keyAlias/
