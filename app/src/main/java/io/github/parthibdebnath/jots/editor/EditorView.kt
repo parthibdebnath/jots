@@ -171,12 +171,57 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
             viewport.visibleHeight,
             minThumb = 36 * density,
         )
-        // Keep Android's back gesture away from the thumb so a finger can grab it too.
-        val r = Rect(
-            scrollStrip.left.toInt(), (scrollBar.thumbTop - 16 * density).toInt(),
-            scrollStrip.right.toInt(), (scrollBar.thumbBottom + 16 * density).toInt(),
-        )
-        systemGestureExclusionRects = listOf(r)
+        applyGestureExclusion()
+    }
+
+    // Android's edge-swipe back gesture would otherwise take strokes that start near the screen's
+    // sides. It can only be excluded for about 200dp per edge, so while the pen is around, that
+    // allowance follows the pen. A hovering pen is seen well before it lands, which gives the
+    // system time to apply it. Fingers get normal back gestures again once the pen has gone.
+    private var edgeShieldY = Float.NaN
+    private val dropEdgeShield = Runnable {
+        edgeShieldY = Float.NaN
+        applyGestureExclusion()
+    }
+
+    private fun shieldEdgesAt(y: Float) {
+        if (edgeShieldY.isNaN() || abs(y - edgeShieldY) > EDGE_SHIELD_MOVE_DP * density) {
+            edgeShieldY = y
+            applyGestureExclusion()
+        }
+    }
+
+    private fun dropEdgeShieldAfter(ms: Long) {
+        removeCallbacks(dropEdgeShield)
+        postDelayed(dropEdgeShield, ms)
+    }
+
+    private fun applyGestureExclusion() {
+        systemGestureExclusionRects = if (edgeShieldY.isNaN()) {
+            // Keep the back gesture away from the thumb so a finger can grab it too.
+            listOf(
+                Rect(
+                    scrollStrip.left.toInt(), (scrollBar.thumbTop - 16 * density).toInt(),
+                    scrollStrip.right.toInt(), (scrollBar.thumbBottom + 16 * density).toInt(),
+                ),
+            )
+        } else {
+            val half = (EDGE_SHIELD_HEIGHT_DP / 2 * density).toInt()
+            val top = edgeShieldY.toInt() - half
+            val bottom = edgeShieldY.toInt() + half
+            val w = (EDGE_SHIELD_WIDTH_DP * density).toInt()
+            listOf(Rect(0, top, w, bottom), Rect(width - w, top, width, bottom))
+        }
+    }
+
+    /**
+     * True if a back gesture that just fired is really a pen stroke the system took over: it
+     * cancels the stroke first. The safety net for when the edge shield didn't get there in time.
+     */
+    fun consumePenBackGesture(): Boolean {
+        val hit = SystemClock.uptimeMillis() - penCancelledAt < PEN_BACK_WINDOW_MS
+        penCancelledAt = -PEN_BACK_WINDOW_MS
+        return hit
     }
 
     val canUndo get() = document.canUndo
@@ -246,6 +291,7 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     private var lastPenX = 0f
     private var lastPenY = 0f
     private var lastPenActivity = 0L
+    private var penCancelledAt = -PEN_BACK_WINDOW_MS
 
     override fun onInterceptTouchEvent(ev: MotionEvent) = true
 
@@ -331,6 +377,8 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
         val y = ev.y
         lastPenX = x
         lastPenY = y
+        removeCallbacks(dropEdgeShield)
+        shieldEdgesAt(y)
         // A tablet Android treats as a mouse reports a barrel-button press as a "touch" with no
         // primary button: that's the button, not the tip, so it mustn't draw.
         if (ev.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE && ev.buttonState and MotionEvent.BUTTON_PRIMARY == 0) {
@@ -431,6 +479,8 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
     }
 
     private fun penUp(ev: MotionEvent, cancel: Boolean) {
+        dropEdgeShieldAfter(EDGE_SHIELD_LINGER_MS)
+        if (cancel && penGesture != PenGesture.NONE) penCancelledAt = SystemClock.uptimeMillis()
         removeCallbacks(holdToSnap)
         lastInkEvent?.recycle()
         lastInkEvent = null
@@ -542,6 +592,10 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
                 hoverY = y
                 hoverEffective = resolve(ev)
                 lastPenActivity = SystemClock.uptimeMillis()
+                if (hoverVisible) {
+                    shieldEdgesAt(y)
+                    dropEdgeShieldAfter(EDGE_SHIELD_LINGER_MS)
+                }
             }
         }
         overlay.invalidate()
@@ -1131,6 +1185,11 @@ class EditorView(context: Context, private val host: Host) : FrameLayout(context
         const val ACCENT = 0xFF3D6DF2.toInt()
         private const val PALM_GRACE_MS = 400L
         private const val HOLD_MS = 500L
+        private const val EDGE_SHIELD_HEIGHT_DP = 190f // Android allows 200dp per edge.
+        private const val EDGE_SHIELD_WIDTH_DP = 60f
+        private const val EDGE_SHIELD_MOVE_DP = 32f
+        private const val EDGE_SHIELD_LINGER_MS = 1000L
+        private const val PEN_BACK_WINDOW_MS = 2000L
         private const val HOLD_SLOP_DP = 4f
 
         /** Renders the top of a note for the notes list. */

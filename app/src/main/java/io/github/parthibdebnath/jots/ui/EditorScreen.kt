@@ -141,6 +141,8 @@ fun EditorScreen(activity: MainActivity, app: JotsApp, noteId: String, onClose: 
 
     BackHandler {
         when {
+            // An edge stroke the system mistook for a back swipe, not a request to leave.
+            controller.view.consumePenBackGesture() -> controller.showFlash("Back ignored while drawing")
             focus -> activity.setFocus(false)
             controller.hasSelection -> controller.view.clearSelection()
             else -> onClose()
